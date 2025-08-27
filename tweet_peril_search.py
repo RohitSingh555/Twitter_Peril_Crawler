@@ -1,11 +1,11 @@
 """
-tweet_fire_search.py
+tweet_peril_search.py
 --------------------
-Fetches the latest fire‑related tweets across U.S. states and core EMS accounts.
+Fetches the latest peril-related tweets across U.S. states and core emergency accounts.
 
 Usage:
     export TWITTER_API_KEY="YOUR_API_KEY"
-    python tweet_fire_search.py
+    python tweet_peril_search.py
 """
 
 import os
@@ -46,64 +46,43 @@ US_STATES = [
     "West Virginia", "Wisconsin", "Wyoming", "DC"
 ]
 
-def load_damage_keywords() -> List[str]:
-    """Load damage keywords from JSON file."""
+def load_peril_keywords() -> List[str]:
+    """Load peril keywords from JSON file."""
     try:
-        with open('damage_keywords.json', 'r', encoding='utf-8') as f:
+        with open('peril_keywords.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return data.get('damage_keywords', [])
+            return data.get('peril_keywords', [])
     except FileNotFoundError:
-        print("Warning: damage_keywords.json not found, using default keywords")
+        print("Warning: peril_keywords.json not found, using default keywords")
         return ["explosion damage", "lightning damage", "flood damage", "freezing damage", 
                 "tornado damage", "storm damage", "hail damage", "pipe burst damage", 
                 "structure damage", "water damage", "smoke damage"]
     except json.JSONDecodeError:
-        print("Warning: Invalid JSON in damage_keywords.json, using default keywords")
+        print("Warning: Invalid JSON in peril_keywords.json, using default keywords")
         return ["explosion damage", "lightning damage", "flood damage", "freezing damage", 
                 "tornado damage", "storm damage", "hail damage", "pipe burst damage", 
                 "structure damage", "water damage", "smoke damage"]
 
-# Load damage keywords
-DAMAGE_KEYWORDS = load_damage_keywords()
+# Load peril keywords
+PERIL_KEYWORDS = load_peril_keywords()
 
 def generate_search_combinations() -> List[str]:
-    """Generate all possible search combinations using permutations and combinations of damage keywords."""
+    """Generate single search combinations: state + keyword."""
     combinations = []
     
-    # Single keyword combinations
+    # Single keyword combinations only
     for state in US_STATES:
-        for keyword in DAMAGE_KEYWORDS:
+        for keyword in PERIL_KEYWORDS:
             combinations.append(f"{state} {keyword}")
-    
-    # Two keyword combinations (permutations)
-    for state in US_STATES:
-        for combo in itertools.permutations(DAMAGE_KEYWORDS, 2):
-            combinations.append(f"{state} {' '.join(combo)}")
-    
-    # Three keyword combinations (permutations)
-    for state in US_STATES:
-        for combo in itertools.permutations(DAMAGE_KEYWORDS, 3):
-            combinations.append(f"{state} {' '.join(combo)}")
     
     return combinations
 
-FIRE_ACCOUNTS = [
-    "@DFWscanner", "@DallasTexasTV", "@NWSSanAntonio", "@FriscoFFD", "@RedCrossTXGC",
-    "@whatsupTucson", "@WacoTXFire", "@SouthMetroPIO", "@NWSBoulder", "@SeattleFire",
-    "@CityofMiamiFire", "@PeterNewcomb41", "@ffxfirerescue", "@ScannerRadioDFW",
-    "@sfgafirerescue", "@THEJFRD", "@ChicagoMWeather", "@ToledoFire", "@AustinFireInfo"
-]
-
 # Generate search combinations using damage keywords
-DAMAGE_SEARCH_COMBINATIONS = generate_search_combinations()
+PERIL_SEARCH_COMBINATIONS = generate_search_combinations()
 
-def get_all_fire_accounts() -> List[str]:
-    """Returns fire account handles without '@' prefix."""
-    return [account[1:] for account in FIRE_ACCOUNTS]
-
-def get_all_damage_search_combinations() -> List[str]:
-    """Returns all damage search combinations."""
-    return DAMAGE_SEARCH_COMBINATIONS
+def get_all_peril_search_combinations() -> List[str]:
+    """Returns all peril search combinations."""
+    return PERIL_SEARCH_COMBINATIONS
 
 def handle_rate_limit(response: requests.Response) -> None:
     """Handle rate limiting by sleeping for a fixed time."""
@@ -142,37 +121,7 @@ def fetch_tweets(query: str, max_results: int = 20) -> List[Dict[str, Any]]:
         print(f"Exception while fetching tweets for query '{query}': {str(e)}")
         return []
 
-def fetch_user_tweets(username: str, max_results: int = 20) -> List[Dict[str, Any]]:
-    """Fetch latest tweets from a specific user using Kaito Twitter API."""
-    url = "https://api.twitterapi.io/twitter/tweet/advanced_search"
-    headers = {
-        "X-API-Key": TWITTER_API_KEY
-    }
-    params = {
-        "query": f"from:{username} within_time:{SEARCH_HOURS}h",
-        "queryType": "Latest"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        
-        if response.status_code == 429:
-            handle_rate_limit(response)
-            # Retry the request after rate limit handling
-            response = requests.get(url, headers=headers, params=params)
-        
-        if response.status_code == 200:
-            data = response.json()
-            tweets = data.get('tweets', [])
-            # Limit to max_results
-            return tweets[:max_results]
-        else:
-            print(f"Error fetching tweets for user '{username}': {response.status_code} - {response.text}")
-            return []
-            
-    except Exception as e:
-        print(f"Exception while fetching tweets for user '{username}': {str(e)}")
-        return []
+
 
 def deduplicate_tweets(tweets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Remove duplicate tweets based on tweet ID."""
@@ -187,7 +136,7 @@ def deduplicate_tweets(tweets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     
     return unique_tweets
 
-def save_tweets_to_file(tweets: List[Dict[str, Any]], filename: str = "damage_tweets.json") -> None:
+def save_tweets_to_file(tweets: List[Dict[str, Any]], filename: str = "peril_tweets.json") -> None:
     """Save tweets to JSON file with deduplication."""
     # Load existing tweets if file exists
     existing_tweets = []
@@ -211,18 +160,18 @@ def save_tweets_to_file(tweets: List[Dict[str, Any]], filename: str = "damage_tw
     print(f"Saved {len(unique_tweets)} unique tweets to {filename}")
 
 def main():
-    """Main routine to fetch and save damage-related tweets."""
-    print("Starting damage tweet search...")
+    """Main routine to fetch and save peril-related tweets."""
+    print("Starting peril tweet search...")
     
     # Generate unique timestamped filename
     dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    output_file = f"damage_tweets_72h_{dt_str}.json"
+    output_file = f"peril_tweets_72h_{dt_str}.json"
     
     total_queries = 0
     total_tweets_fetched = 0
     
     # Fetch tweets for search combinations
-    search_combinations = get_all_damage_search_combinations()
+    search_combinations = get_all_peril_search_combinations()
     print(f"Fetching tweets for {len(search_combinations)} search combinations...")
     
     for i, query in enumerate(search_combinations, 1):
@@ -240,24 +189,7 @@ def main():
         # Small delay to be respectful to the API
         time.sleep(0.1)
     
-    # Fetch tweets from damage-related accounts
-    fire_accounts = get_all_fire_accounts()
-    print(f"\nFetching tweets from {len(fire_accounts)} damage-related accounts...")
-    
-    for i, username in enumerate(fire_accounts, 1):
-        print(f"Account {i}/{len(fire_accounts)}: {username}")
-        tweets = fetch_user_tweets(username)
-        
-        if tweets:
-            total_tweets_fetched += len(tweets)
-            # Save immediately after each successful query
-            save_tweets_to_file(tweets, output_file)
-            print(f"  -> Fetched {len(tweets)} tweets")
-        
-        total_queries += 1
-        
-        # Small delay to be respectful to the API
-        time.sleep(0.1)
+
     
     # Print final summary
     print(f"\n=== Final Summary ===")
