@@ -1,0 +1,15 @@
+{
+  "damage_keywords": [
+    "explosion damage",
+    "lightning damage",
+    "flood damage",
+    "freezing damage",
+    "tornado damage",
+    "storm damage",
+    "hail damage",
+    "pipe burst damage",
+    "structure damage",
+    "water damage",
+    "smoke damage"
+  ]
+}
