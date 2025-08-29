@@ -1,5 +1,6 @@
 import json
 import datetime
+import glob
 from datetime import timezone
 import os
 
@@ -91,12 +92,21 @@ def process_tweets(input_file, output_file, hours=74):
     return filtered_tweets
 
 def main():
-    input_file = 'fire_tweets.json'
-    output_file = 'cleaned_fire_tweets.json'
+    # Look for peril tweets in output folder
+    input_files = glob.glob("output/peril_tweets_72h_*.json")
+    if input_files:
+        # Use the most recent one
+        input_file = max(input_files, key=os.path.getctime)
+        print(f"Using latest peril tweets file: {input_file}")
+    else:
+        input_file = 'output/peril_tweets.json'
+    
+    output_file = 'output/cleaned_peril_tweets.json'
     hours = 74
     
     if not os.path.exists(input_file):
         print(f"Input file {input_file} not found!")
+        print("Please run tweet_peril_search.py first to generate tweet data.")
         return
     
     print(f"Processing tweets from the past {hours} hours...")

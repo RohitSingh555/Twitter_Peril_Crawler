@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Fire Detection Pipeline
-=======================
-Automated pipeline to search for fire-related tweets and verify incidents.
+Peril Detection Pipeline
+========================
+Automated pipeline to search for peril-related tweets and verify incidents.
 
 This script runs the complete workflow:
-1. Search for fire-related tweets from the last 72 hours
+1. Search for peril-related tweets from the last 72 hours
 2. Verify incidents using AI
 3. Generate Excel and JSON reports
 4. Send results via email
@@ -54,11 +54,11 @@ def check_environment():
 
 def run_tweet_search():
     """Run the tweet search script"""
-    print("🔍 Step 1: Searching for fire-related tweets...")
+    print("🔍 Step 1: Searching for peril-related tweets...")
     print("=" * 50)
     
     try:
-        result = subprocess.run([sys.executable, "tweet_fire_search.py"], 
+        result = subprocess.run([sys.executable, "tweet_peril_search.py"], 
                               check=True)
         return True
     except subprocess.CalledProcessError as e:
@@ -67,7 +67,7 @@ def run_tweet_search():
 
 def run_verification():
     """Run the tweet verification script"""
-    print("\n🤖 Step 2: Verifying fire incidents with AI...")
+    print("\n🤖 Step 2: Verifying peril incidents with AI...")
     print("=" * 50)
     
     try:
@@ -80,7 +80,7 @@ def run_verification():
 
 def main():
     """Main execution function"""
-    print("🔥 Fire Detection Pipeline")
+    print("🚨 Peril Detection Pipeline")
     print("=" * 50)
     print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print()
@@ -94,11 +94,15 @@ def main():
         print("❌ Tweet search failed. Stopping pipeline.")
         sys.exit(1)
     
-    # Check if fire_tweets_72h_*.json was created
-    fire_tweets_files = glob.glob("fire_tweets_72h_*.json")
-    if not fire_tweets_files:
-        print("❌ No fire_tweets_72h_*.json files found after search. Stopping pipeline.")
+    # Check if peril_tweets_72h_*.json was created in output directory
+    peril_tweets_files = glob.glob("output/peril_tweets_72h_*.json")
+    if not peril_tweets_files:
+        print("❌ No peril_tweets_72h_*.json files found after search. Stopping pipeline.")
         sys.exit(1)
+    
+    print(f"✅ Found {len(peril_tweets_files)} peril tweet files")
+    latest_file = max(peril_tweets_files, key=os.path.getctime)
+    print(f"📁 Latest file: {latest_file}")
     
     # Step 2: Verification
     if not run_verification():

@@ -38,13 +38,14 @@ def parse_twitter_date(date_string):
         # Return original string if parsing fails
         return date_string
 
-def get_fire_analysis(content):
-    """Get fire score, state, and county from tweet content"""
+def get_peril_analysis(content):
+    """Get peril score, state, and county from tweet content"""
     prompt = (
-        "Analyze the following tweet about fire incidents in the United States and provide:\n"
-        "1. A fire-relatedness score from 0-10 (0=not related, 10=definitely fire-related)\n"
-        "2. The US state where the fire occurred (use ONLY the state name like California, Texas, New York, Arizona, etc. - do NOT include 'County' in the state name)\n"
-        "3. The county where the fire occurred (use ONLY the county name, not the state name)\n\n"
+        "Analyze the following tweet about property damage incidents in the United States and provide:\n"
+        "1. A peril-relatedness score from 0-10 (0=not related, 10=definitely peril-related)\n"
+        "2. The US state where the incident occurred (use ONLY the state name like California, Texas, New York, Arizona, etc. - do NOT include 'County' in the state name)\n"
+        "3. The county where the incident occurred (use ONLY the county name, not the state name)\n\n"
+        "Perils include: fire, flood, storm damage, tornado damage, hail damage, lightning damage, explosion damage, pipe burst damage, structural damage, water damage, smoke damage, wind damage, hurricane damage, earthquake damage, vandalism, theft, and any other property destruction that could result in insurance claims.\n\n"
         "Respond in this exact format:\n"
         "Score: [0-10]\n"
         "State: [State name only or N/A]\n"
@@ -56,7 +57,7 @@ def get_fire_analysis(content):
         f"Tweet content: {content[:2000]}"
     )
     messages = [
-        {"role": "system", "content": "You are an AI that analyzes fire-related tweets to extract fire scores and location information. Always respond in the exact format specified."},
+        {"role": "system", "content": "You are an AI that analyzes property damage tweets to extract peril scores and location information. Always respond in the exact format specified."},
         {"role": "user", "content": prompt}
     ]
     try:
@@ -119,29 +120,102 @@ def get_fire_analysis(content):
         print(f"Error with OpenAI API (analysis): {e}")
         return 0, "N/A", "N/A"
 
-def get_fire_related_score(content):
-    """Get a score from 0-10 indicating how fire-related the tweet is (legacy function)"""
-    score, _, _ = get_fire_analysis(content)
+def extract_peril_type(search_query: str) -> str:
+    """Extract peril type from the search query used to find the tweet."""
+    if not search_query:
+        return "Unknown"
+    
+    query_lower = search_query.lower()
+    
+    # Check for specific peril types
+    if "flood" in query_lower:
+        return "Flood"
+    elif "hail" in query_lower:
+        return "Hail"
+    elif "tornado" in query_lower:
+        return "Tornado"
+    elif "storm" in query_lower:
+        return "Storm"
+    elif "smoke" in query_lower:
+        return "Smoke"
+    elif "explosion" in query_lower:
+        return "Explosion"
+    elif "lightning" in query_lower:
+        return "Lightning"
+    elif "freezing" in query_lower:
+        return "Freezing"
+    elif "pipe burst" in query_lower:
+        return "Pipe Burst"
+    elif "damage" in query_lower:
+        # For damage keywords, try to extract the specific peril
+        if "flood damage" in query_lower:
+            return "Flood Damage"
+        elif "tornado damage" in query_lower:
+            return "Tornado Damage"
+        elif "storm damage" in query_lower:
+            return "Storm Damage"
+        elif "hail damage" in query_lower:
+            return "Hail Damage"
+        elif "smoke damage" in query_lower:
+            return "Smoke Damage"
+        elif "explosion damage" in query_lower:
+            return "Explosion Damage"
+        elif "lightning damage" in query_lower:
+            return "Lightning Damage"
+        elif "freezing damage" in query_lower:
+            return "Freezing Damage"
+        elif "pipe burst damage" in query_lower:
+            return "Pipe Burst Damage"
+        else:
+            return "Damage"
+    else:
+        return "Other"
+
+def get_peril_related_score(content):
+    """Get a score from 0-10 indicating how peril-related the tweet is (legacy function)"""
+    score, _, _ = get_peril_analysis(content)
     return score
 
-def verify_fire_incident(text, url):
-    """Verify if the tweet describes a fire incident in the USA"""
+def verify_peril_incident(text, url):
+    """Verify if the tweet describes a peril incident in the USA that could result in insurance claims"""
     print(f"Verifying: {url}")
     truncated_content = text[:4000]
-    fire_incident_prompt = (
-        "You are given the content of a tweet. Determine if it describes a fire incident in the United States that likely caused damage to physical structures (such as homes, apartments, offices, commercial buildings, factories, or infrastructure). "
-        "The fire may have resulted in structural damage or destruction, due to causes like electrical faults, negligence, accidents, natural disasters (e.g., wildfires), or arson. "
-        "Be inclusive: If the tweet suggests a fire incident with possible or likely damage to structures, even if not 100% explicit, respond with 'yes'. "
-        "Respond with 'yes' if the tweet is about a fire incident in the USA that could have caused damage to physical structures. Otherwise, respond with 'no'.\n\n"
-        f"Tweet content: {truncated_content}\nURL: {url}\n"
-        "Only use the provided content for your evaluation. Do not infer or assume details not present in the text, but err on the side of inclusion if the fire incident is plausible."
-    )
+    peril_incident_prompt = (
+    "You are an insurance sales professional looking for tweets that describe REAL incidents "
+    "in the United States that could result in insurance claims for PROPERTY or STRUCTURAL damage. "
+    "Focus ONLY on homes, buildings, businesses, or infrastructure. Ignore vehicle-only damage.\n\n"
+
+    "STRICT criteria (only mark 'yes' if ALL apply):\n"
+    "1. The tweet must clearly describe or strongly imply STRUCTURAL or PROPERTY damage, "
+    "such as flooding, fire, roof collapse, broken pipes, storm damage to homes/buildings, "
+    "or infrastructure failures.\n"
+    "2. Mentions of damage ONLY to cars, trucks, or other vehicles should be marked 'no' "
+    "unless the tweet also indicates property/structural damage.\n"
+    "3. General mentions of weather (rain, snow, heat, cold, etc.) WITHOUT property damage "
+    "do NOT count.\n"
+    "4. Ads, promotions, fundraising, or generic service offers (e.g., plumbers, contractors, roofers) "
+    "should be marked 'no'.\n"
+    "5. Flag tweets ONLY if they imply actual damage, repairs, or people directly affected.\n"
+    "6. Ignore jokes, sarcasm, sports, or event chatter not tied to real property/structural loss.\n\n"
+
+    "Examples:\n"
+    "- 'My basement flooded after the storm' → yes\n"
+    "- 'Pipe burst in my house last night' → yes\n"
+    "- 'The roof collapsed during the blizzard' → yes\n"
+    "- 'Car got wrecked in a hailstorm' → no\n"
+    "- 'It poured rain at the football game' → no\n"
+    "- 'XYZ Roofing offers free inspections' → no\n\n"
+
+    f"Tweet content: {truncated_content}\nURL: {url}\n"
+    "Respond ONLY with 'yes' or 'no'."
+)
+
     messages = [
         {
             "role": "system",
-            "content": "You are an AI tasked with evaluating tweets to determine if they describe fire damages or destruction in the United States. Be inclusive: If the tweet is plausibly about fire damages or destruction in the USA, mark as 'yes'."
+            "content": "You are an AI insurance sales professional. Your job is to identify ANY tweets that could potentially lead to insurance sales or claims. Be very inclusive - any problem, damage, risk, or concern mentioned could be an insurance opportunity. Think like a salesperson looking for potential customers who need insurance coverage for property damage, liability, or other risks."
         },
-        {"role": "user", "content": fire_incident_prompt}
+        {"role": "user", "content": peril_incident_prompt}
     ]
     try:
         ai_response = client.chat.completions.create(
@@ -256,6 +330,77 @@ def autosize_and_format_excel(excel_path):
     except Exception as e:
         print(f"Error formatting Excel: {e}")
 
+def remove_duplicate_content(excel_path):
+    """Remove rows with duplicate or very similar content from Excel file"""
+    try:
+        import pandas as pd
+        from difflib import SequenceMatcher
+        
+        # Read the Excel file
+        df = pd.read_excel(excel_path)
+        original_count = len(df)
+        
+        if original_count <= 1:
+            print(f"[DEDUP] No duplicates to remove (only {original_count} row)")
+            return
+        
+        print(f"[DEDUP] Checking {original_count} rows for duplicates...")
+        
+        # Function to check similarity between two texts
+        def is_similar(text1, text2, threshold=0.8):
+            if pd.isna(text1) or pd.isna(text2):
+                return False
+            text1_str = str(text1).lower().strip()
+            text2_str = str(text2).lower().strip()
+            
+            # If exact match (after cleaning), definitely duplicate
+            if text1_str == text2_str:
+                return True
+            
+            # Check for high similarity using SequenceMatcher
+            similarity = SequenceMatcher(None, text1_str, text2_str).ratio()
+            return similarity >= threshold
+        
+        # Find and remove duplicates
+        rows_to_drop = []
+        
+        for i in range(len(df)):
+            if i in rows_to_drop:
+                continue
+                
+            current_content = df.iloc[i]['content']
+            
+            for j in range(i + 1, len(df)):
+                if j in rows_to_drop:
+                    continue
+                    
+                compare_content = df.iloc[j]['content']
+                
+                if is_similar(current_content, compare_content):
+                    # Keep the first occurrence, mark the second for removal
+                    rows_to_drop.append(j)
+                    print(f"[DEDUP] Found duplicate: Row {j+1} similar to Row {i+1}")
+        
+        # Remove duplicate rows
+        if rows_to_drop:
+            df_cleaned = df.drop(df.index[rows_to_drop])
+            df_cleaned = df_cleaned.reset_index(drop=True)
+            
+            # Save the cleaned data back to Excel
+            df_cleaned.to_excel(excel_path, index=False)
+            
+            removed_count = original_count - len(df_cleaned)
+            print(f"[DEDUP] Removed {removed_count} duplicate rows")
+            print(f"[DEDUP] Final count: {len(df_cleaned)} rows")
+            
+            # Re-format the Excel file
+            autosize_and_format_excel(excel_path)
+        else:
+            print(f"[DEDUP] No duplicates found")
+            
+    except Exception as e:
+        print(f"[ERROR] Error removing duplicates: {e}")
+
 def send_email_results(excel_path, json_path, verified_count):
     """Send verification results via email"""
     try:
@@ -272,23 +417,23 @@ def send_email_results(excel_path, json_path, verified_count):
         
         # Recipient emails
         recipient_emails = [
-            "info@theagilemorph.com",
+            # "info@theagilemorph.com",
             "forrohitsingh99@gmail.com",
-            "unipaney@dhaninfo.biz",
-            "u@agilemorph.biz", 
-            "rchakraborty@dhaninfo.biz",
-            "npalliwal@dhaninfo.biz",
-            "lalit.shukla@dhaninfo.biz",
-            "rnagmote@dhaninfo.biz",
-            "apandey@dhaninfo.biz",
-            "careports@dhaninfo.biz"
+            # "unipaney@dhaninfo.biz",
+            # "u@agilemorph.biz", 
+            # "rchakraborty@dhaninfo.biz",
+            # "npalliwal@dhaninfo.biz",
+            # "lalit.shukla@dhaninfo.biz",
+            # "rnagmote@dhaninfo.biz",
+            # "apandey@dhaninfo.biz",
+            # "careports@dhaninfo.biz"
         ]
         
         # Create message
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = ", ".join(recipient_emails)
-        msg['Subject'] = f"Fire Incident Verification Results - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+        msg['Subject'] = f"Peril Incident Verification Results - {datetime.now().strftime('%Y-%m-%d %H:%M')}"
         
         # Email body with HTML formatting and AgileMorph branding
         html_body = f"""
@@ -402,20 +547,20 @@ def send_email_results(excel_path, json_path, verified_count):
         </head>
         <body>
             <div class="header">
-                <h1>🔥 Fire Incident Detection Report</h1>
-                <p>Automated AI-Powered Fire Incident Verification</p>
+                <h1>🚨 Peril Incident Detection Report</h1>
+                <p>Automated AI-Powered Property Damage & Peril Detection</p>
             </div>
             
             <div class="content">
                 <div class="summary-box">
                     <h3>📊 Executive Summary</h3>
-                    <p>Your automated fire incident detection system has completed its analysis of social media data from the last 72 hours.</p>
+                    <p>Your automated peril incident detection system has completed its analysis of social media data from the last 72 hours.</p>
                 </div>
                 
                 <div class="stats">
                     <div class="stat-item">
                         <div class="stat-number">{verified_count}</div>
-                        <div class="stat-label">Verified Incidents</div>
+                        <div class="stat-label">Verified Perils</div>
                     </div>
                     <div class="stat-item">
                         <div class="stat-number">{datetime.now().strftime('%H:%M')}</div>
@@ -430,12 +575,12 @@ def send_email_results(excel_path, json_path, verified_count):
                 <div class="attachments">
                     <h4>📎 Attached Files</h4>
                     <ul>
-                        <li><strong>Excel Report:</strong> Detailed analysis with verified fire incidents</li>
+                        <li><strong>Excel Report:</strong> Detailed analysis with verified peril incidents</li>
                         <li><strong>JSON Data:</strong> Raw data for further processing</li>
                     </ul>
                 </div>
                 
-                <p><strong>Report Coverage:</strong> This automated analysis covers fire-related social media activity across all 50 U.S. states, including verified incidents with structural damage potential.</p>
+                <p><strong>Report Coverage:</strong> This automated analysis covers property damage and peril-related social media activity across all 50 U.S. states, including verified incidents with structural damage potential that could result in insurance claims.</p>
                 
                 <div class="footer">
                     <p><em>Powered by advanced AI automation and real-time social media monitoring</em></p>
@@ -457,17 +602,17 @@ def send_email_results(excel_path, json_path, verified_count):
         
         # Plain text fallback
         plain_body = f"""
-Fire Incident Verification Complete!
+Peril Incident Verification Complete!
 
 Summary:
-- Total verified fire incidents: {verified_count}
+- Total verified peril incidents: {verified_count}
 - Verification completed: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 Files attached:
 1. Excel file with detailed results
 2. JSON file with raw data
 
-This automated report contains verified fire-related tweets from the last 72 hours.
+This automated report contains verified property damage and peril-related tweets from the last 72 hours.
 
 Powered by AgileMorph - https://theagilemorph.com/
         """
@@ -509,12 +654,12 @@ Powered by AgileMorph - https://theagilemorph.com/
         print(f"[EMAIL] Email sent successfully to {len(recipient_emails)} recipients!")
         
         # Send data to API endpoint
-        print(f"\n[API] Sending data to API endpoint...")
+        print(f"\n[API] Sending peril data to API endpoint...")
         api_success = send_to_api(json_path, verified_count)
         if api_success:
-            print(f"[API] Data successfully sent to API endpoint")
+            print(f"[API] Peril data successfully sent to API endpoint")
         else:
-            print(f"[API] Failed to send data to API endpoint")
+            print(f"[API] Failed to send peril data to API endpoint")
         
     except Exception as e:
         print(f"[ERROR] Error sending email: {e}")
@@ -528,8 +673,8 @@ def verify_and_save_tweets(cleaned_json_path, output_dir="output"):
     
     # Generate timestamped filenames with more detail
     dt_str = datetime.now().strftime('%Y%m%d_%H%M%S')
-    excel_path = os.path.join(output_dir, f"verified_fires_{dt_str}.xlsx")
-    live_json_path = os.path.join(output_dir, f"live_verified_fires_{dt_str}.json")
+    excel_path = os.path.join(output_dir, f"verified_perils_{dt_str}.xlsx")
+    live_json_path = os.path.join(output_dir, f"live_verified_perils_{dt_str}.json")
     
     print(f"[OUTPUT] Output files:")
     print(f"   Excel: {excel_path}")
@@ -547,7 +692,7 @@ def verify_and_save_tweets(cleaned_json_path, output_dir="output"):
     verified_count = 0
     
     # Process each tweet
-    for i, tweet in enumerate(tqdm(tweets, desc="Verifying tweets with AI")):
+    for i, tweet in enumerate(tqdm(tweets, desc="Verifying tweets for perils with AI")):
         try:
             # Extract tweet data
             tweet_id = tweet.get('id', f"tweet_{i}")
@@ -571,16 +716,20 @@ def verify_and_save_tweets(cleaned_json_path, output_dir="output"):
             print(f"[DEBUG] Processing tweet {tweet_id} - Length: {len(text.strip())} chars")
             
             # Verify with AI
-            verification_result = verify_fire_incident(text, url)
+            verification_result = verify_peril_incident(text, url)
             
-            # If verified, get fire analysis (score, state, county) and save
+            # If verified, get peril analysis (score, state, county) and save
             if verification_result.lower().startswith("yes"):
-                fire_score, state, county = get_fire_analysis(text)
-                print(f"[DEBUG] Tweet {tweet_id} - Fire score: {fire_score}, State: '{state}', County: '{county}'")
+                peril_score, state, county = get_peril_analysis(text)
+                print(f"[DEBUG] Tweet {tweet_id} - Peril score: {peril_score}, State: '{state}', County: '{county}'")
                 
-                # Only save tweets with fire score >= 5
-                if fire_score >= 5:
+                # Only save tweets with peril score >= 5
+                if peril_score >= 5:
                     verified_at = datetime.now().isoformat()
+                    
+                    # Extract peril type from the search query
+                    search_query = tweet.get('search_query', '')
+                    peril_type = extract_peril_type(search_query)
                     
                     # Create entry with all necessary columns including tweet_id for deduplication
                     entry = {
@@ -590,11 +739,12 @@ def verify_and_save_tweets(cleaned_json_path, output_dir="output"):
                         'published_date': created_at,
                         'url': url,
                         'source': username,
-                        'fire_related_score': fire_score,
+                        'peril_related_score': peril_score,
                         'state': state,
                         'county': county,
                         'verification_result': verification_result,
-                        'verified_at': verified_at
+                        'verified_at': verified_at,
+                        'peril_type': peril_type
                     }
                     
                     # Save to live JSON immediately
@@ -604,19 +754,19 @@ def verify_and_save_tweets(cleaned_json_path, output_dir="output"):
                     update_excel_file(excel_path, entry)
                     
                     verified_count += 1
-                    print(f"[FIRE] Verified tweet {verified_count} (score: {fire_score}): {tweet_id}")
+                    print(f"[PERIL] Verified tweet {verified_count} (score: {peril_score}): {tweet_id}")
                     
                     # Small delay to show live processing
                     time.sleep(0.5)
                 else:
-                    print(f"[SKIP] Tweet {tweet_id} verified but score too low ({fire_score}/10) - skipping")
+                    print(f"[SKIP] Tweet {tweet_id} verified but score too low ({peril_score}/10) - skipping")
             
         except Exception as e:
             print(f"Error processing tweet {i}: {e}")
             continue
     
     print(f"\n[SUCCESS] Verification complete!")
-    print(f"[OK] Total verified fire incidents: {verified_count}")
+    print(f"[OK] Total verified peril incidents: {verified_count}")
     print(f"[OUTPUT] Results saved to:")
     print(f"   Excel: {excel_path}")
     print(f"   JSON: {live_json_path}")
@@ -657,22 +807,22 @@ def main():
     if len(sys.argv) > 1:
         json_path = sys.argv[1]
     else:
-        # Look for most recent fire_tweets_72h_*.json file first, then cleaned files
-        fire_tweets_files = glob.glob("fire_tweets_72h_*.json")
-        if fire_tweets_files:
+        # Look for most recent peril_tweets_72h_*.json file in output folder first, then cleaned files
+        peril_tweets_files = glob.glob("output/peril_tweets_72h_*.json")
+        if peril_tweets_files:
             # Use the most recent one
-            json_path = max(fire_tweets_files, key=os.path.getctime)
-            print(f"[FILE] Using latest fire tweets file: {json_path}")
+            json_path = max(peril_tweets_files, key=os.path.getctime)
+            print(f"[FILE] Using latest peril tweets file: {json_path}")
         else:
             # Fallback to cleaned tweet files
-            cleaned_files = glob.glob("*cleaned*.json")
+            cleaned_files = glob.glob("output/*cleaned*.json")
             if cleaned_files:
                 # Use the most recent one
                 json_path = max(cleaned_files, key=os.path.getctime)
                 print(f"[FILE] Using latest cleaned file: {json_path}")
             else:
-                print("[ERROR] No fire_tweets_72h_*.json or cleaned tweets file found!")
-                print("Please run tweet_fire_search.py first or specify a file path.")
+                print("[ERROR] No peril_tweets_72h_*.json or cleaned tweets file found in output folder!")
+                print("Please run tweet_peril_search.py first or specify a file path.")
                 print("Usage: python verify_tweets.py [path_to_tweets.json]")
                 return
     
@@ -697,10 +847,13 @@ def main():
     verified_count, excel_path, json_path = verify_and_save_tweets(json_path)
     
     if verified_count > 0:
+        print(f"\n[DEDUP] Removing duplicate content before sending email...")
+        remove_duplicate_content(excel_path)
+        
         print(f"\n[EMAIL] Sending results via email...")
         send_email_results(excel_path, json_path, verified_count)
     else:
-        print(f"\n[EMAIL] No verified incidents found - no email sent.")
+        print(f"\n[EMAIL] No verified peril incidents found - no email sent.")
 
 if __name__ == "__main__":
     main() 

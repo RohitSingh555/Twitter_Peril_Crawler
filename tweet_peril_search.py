@@ -51,7 +51,18 @@ def load_peril_keywords() -> List[str]:
     try:
         with open('peril_keywords.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
-            return data.get('peril_keywords', [])
+            # Extract all keywords from the new structure
+            keywords = []
+            for key, value in data.items():
+                if isinstance(value, list):
+                    # Direct lists like "For Flood", "For Hail", etc.
+                    keywords.extend(value)
+                elif isinstance(value, dict):
+                    # Nested structure like "other_perils"
+                    for sub_key, sub_value in value.items():
+                        if isinstance(sub_value, list):
+                            keywords.extend(sub_value)
+            return keywords
     except FileNotFoundError:
         print("Warning: peril_keywords.json not found, using default keywords")
         return ["explosion damage", "lightning damage", "flood damage", "freezing damage", 
@@ -67,13 +78,36 @@ def load_peril_keywords() -> List[str]:
 PERIL_KEYWORDS = load_peril_keywords()
 
 def generate_search_combinations() -> List[str]:
-    """Generate single search combinations: state + keyword."""
+    """Generate search combinations from the loaded keywords."""
     combinations = []
     
-    # Single keyword combinations only
-    for state in US_STATES:
-        for keyword in PERIL_KEYWORDS:
-            combinations.append(f"{state} {keyword}")
+    # Load the JSON data to separate damage_keywords from other sections
+    try:
+        with open('peril_keywords.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            
+        # Get damage_keywords for combination searches
+        damage_keywords = data.get('damage_keywords', [])
+        
+        # Create combinations: state + damage_keyword
+        for state in US_STATES:
+            for damage_keyword in damage_keywords:
+                combinations.append(f"{state} {damage_keyword}")
+        
+        # Add direct searches from other sections (For Flood, For Hail, etc.)
+        for key, value in data.items():
+            if key != 'damage_keywords' and isinstance(value, list):
+                combinations.extend(value)
+            elif isinstance(value, dict):
+                # Handle nested structure like "other_perils"
+                for sub_key, sub_value in value.items():
+                    if isinstance(sub_value, list):
+                        combinations.extend(sub_value)
+                        
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Warning: Error loading peril_keywords.json: {e}")
+        # Fallback to simple approach
+        combinations.extend(PERIL_KEYWORDS)
     
     return combinations
 
@@ -111,6 +145,9 @@ def fetch_tweets(query: str, max_results: int = 20) -> List[Dict[str, Any]]:
         if response.status_code == 200:
             data = response.json()
             tweets = data.get('tweets', [])
+            # Add the search query to each tweet for peril type identification
+            for tweet in tweets:
+                tweet['search_query'] = query
             # Limit to max_results
             return tweets[:max_results]
         else:
@@ -138,11 +175,19 @@ def deduplicate_tweets(tweets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def save_tweets_to_file(tweets: List[Dict[str, Any]], filename: str = "peril_tweets.json") -> None:
     """Save tweets to JSON file with deduplication."""
+    # Ensure output directory exists
+    output_dir = "output"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Full path for the output file
+    output_path = os.path.join(output_dir, filename)
+    
     # Load existing tweets if file exists
     existing_tweets = []
-    if os.path.exists(filename):
+    if os.path.exists(output_path):
         try:
-            with open(filename, 'r', encoding='utf-8') as f:
+            with open(output_path, 'r', encoding='utf-8') as f:
                 existing_tweets = json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
             existing_tweets = []
@@ -153,11 +198,11 @@ def save_tweets_to_file(tweets: List[Dict[str, Any]], filename: str = "peril_twe
     # Deduplicate by tweet ID
     unique_tweets = deduplicate_tweets(all_tweets)
     
-    # Save to file
-    with open(filename, 'w', encoding='utf-8') as f:
+    # Save to file in output directory
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(unique_tweets, f, indent=2, ensure_ascii=False)
     
-    print(f"Saved {len(unique_tweets)} unique tweets to {filename}")
+    print(f"Saved {len(unique_tweets)} unique tweets to {output_path}")
 
 def main():
     """Main routine to fetch and save peril-related tweets."""
@@ -199,7 +244,8 @@ def main():
     
     # Show final count of unique tweets
     try:
-        with open(output_file, 'r', encoding='utf-8') as f:
+        output_path = os.path.join("output", output_file)
+        with open(output_path, 'r', encoding='utf-8') as f:
             final_tweets = json.load(f)
         print(f"Final unique tweets in file: {len(final_tweets)}")
     except Exception as e:

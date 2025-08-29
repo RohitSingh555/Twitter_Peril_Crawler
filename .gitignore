@@ -150,6 +150,9 @@ fire_tweets.json
 cleaned_*.json
 verified_*.json
 
+# Output directory
+output/
+
 # Excel files
 *.xlsx
 *.xls

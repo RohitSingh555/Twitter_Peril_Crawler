@@ -26,14 +26,14 @@ def parse_twitter_date(date_string):
 
 def send_to_api(json_data_path, verified_count):
     """
-    Send fire incident data to the bulk-upload API endpoint.
+    Send peril incident data to the bulk-upload API endpoint.
     
     Args:
         json_data_path (str): Path to the JSON file with verified incidents
-        verified_count (int): Number of verified fire incidents
+        verified_count (int): Number of verified peril incidents
     """
     try:
-        url = 'http://195.250.31.177:9500/api/fire-news/bulk-upload'
+        url = 'http://195.250.31.177:9500/api/peril-news/bulk-upload'
         
         # Load the verified incidents from JSON file
         if not os.path.exists(json_data_path):
@@ -81,7 +81,7 @@ def send_to_api(json_data_path, verified_count):
                 "published_date": parsed_published_date,
                 "url": clean_value(item.get("url", "")),
                 "source": clean_value(item.get("source", "")),
-                "fire_related_score": float(item.get("fire_related_score", 0.8)),
+                "peril_related_score": float(item.get("peril_related_score", 0.8)),
                 "verification_result": clean_value(item.get("verification_result", "yes")),
                 "verified_at": parsed_verified_at,
                 "state": clean_value(item.get("state", "")),  # Use extracted state from AI
@@ -92,8 +92,8 @@ def send_to_api(json_data_path, verified_count):
                 "latitude": 0.0,  # Default to 0.0 instead of None
                 "longitude": 0.0,  # Default to 0.0 instead of None
                 "image_url": clean_value(item.get("image_url", "")),  # Could be extracted from content if needed
-                "tags": "fire,emergency,news,twitter",  # Default tags
-                "reporter_name": "Twitter Fire Detection Bot"  # Could be extracted from content if needed
+                "tags": "peril,property_damage,emergency,news,twitter",  # Default tags
+                "reporter_name": "Twitter Peril Detection Bot"  # Could be extracted from content if needed
             }
             bulk_data["items"].append(json_item)
         
@@ -208,7 +208,7 @@ if __name__ == "__main__":
         print(f"  Published Date (parsed): {parse_twitter_date(item.get('published_date', ''))}")
         print(f"  URL: {item.get('url', 'N/A')}")
         print(f"  Source: {item.get('source', 'N/A')}")
-        print(f"  Fire Score: {item.get('fire_related_score', 'N/A')}")
+        print(f"  Peril Score: {item.get('peril_related_score', 'N/A')}")
         print(f"  Verification: {item.get('verification_result', 'N/A')}")
         print(f"  Verified At: {item.get('verified_at', 'N/A')}")
     
